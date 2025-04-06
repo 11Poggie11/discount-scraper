@@ -1,53 +1,68 @@
-from flask import Flask, jsonify, render_template
-import requests
-from bs4 import BeautifulSoup
-import json
+from flask import Flask, request, jsonify, render_template
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
-def fetch_lidl_deals():
-    url = "https://www.lidl.nl/q/query/parkside-producten?sort=percentageDiscount-desc&brand=parkside&brand=parkside+performance"
-    response = requests.get(url)
-    if response.status_code == 200:
-        html_content = response.text
-        soup = BeautifulSoup(html_content, 'html.parser')
-        product_list = soup.find_all('li', class_='s-grid__item')
-        products = []
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:Admin01!@localhost:3307/discount_scraper'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-        for product in product_list:
-            grid_data_element = product.find('div', class_='s-grid__fragment-item')
-            if grid_data_element:
-                grid_data_str = grid_data_element.get('data-grid-data')
-                if grid_data_str:
-                    try:
-                        grid_data = json.loads(grid_data_str)
-                        price_info = grid_data.get('price', {})
-                        discount_info = price_info.get('discount', {})
-                        percentage_discount = discount_info.get('percentageDiscount', 0)
+db = SQLAlchemy(app)
 
-                        product_info = {
-                            'product_name': grid_data.get('fullTitle', 'N/A'),
-                            'price': price_info.get('price', 'N/A'),
-                            'old_price': price_info.get('oldPrice', 'N/A'),
-                            'discount_percentage': percentage_discount,
-                            'image': grid_data.get('imageList', [])[0] if grid_data.get('imageList') else None,
-                            'link': f"https://www.lidl.nl{grid_data.get('canonicalPath', '')}"
-                        }
-                        products.append(product_info)
-                    except json.JSONDecodeError:
-                        continue
+# Define the database model
+class Deal(db.Model):
+    __tablename__ = 'deals'
 
-        return products
-    return []
+    id = db.Column(db.Integer, primary_key=True)
+    product_name = db.Column(db.String(255), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    old_price = db.Column(db.Float)
+    discount_percentage = db.Column(db.Integer)
+    description = db.Column(db.Text)
+    image_url = db.Column(db.String(255))
+    canonical_path = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+# Initialize database tables
+with app.app_context():
+    db.create_all()
+
+# API endpoint to add a deal
+@app.route('/add_deal', methods=['POST'])
+def add_deal():
+    data = request.json
+    new_deal = Deal(
+        product_name=data['product_name'],
+        price=data['price'],
+        old_price=data.get('old_price'),
+        discount_percentage=data['discount_percentage'],
+        description=data['description'],
+        image_url=data['image_url'],
+        canonical_path=data['canonical_path']
+    )
+    db.session.add(new_deal)
+    db.session.commit()
+    return jsonify({"message": "Deal added successfully!"})
 
 @app.route('/')
 def index():
-    return render_template("index.html")
+    return render_template("index.html")  # Serve the HTML file
 
 @app.route('/api/deals')
 def get_deals():
-    deals = fetch_lidl_deals()
-    return jsonify(deals)
+    deals = Deal.query.all()
+    return jsonify([{
+        "id": deal.id,
+        "product_name": deal.product_name,
+        "price": deal.price,
+        "old_price": deal.old_price,
+        "discount_percentage": deal.discount_percentage,
+        "description": deal.description,
+        "image_url": deal.image_url,
+        "canonical_path": deal.canonical_path,
+        "created_at": deal.created_at
+    } for deal in deals])
+
 
 if __name__ == '__main__':
     app.run(debug=True)
