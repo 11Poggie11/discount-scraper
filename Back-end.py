@@ -21,7 +21,9 @@ class Deal(db.Model):
     description = db.Column(db.Text)
     image_url = db.Column(db.String(255))
     canonical_path = db.Column(db.String(255))
+    url = db.Column(db.String(255))  # New column for the full URL
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
 
 # Initialize database tables
 with app.app_context():
@@ -59,9 +61,10 @@ def get_deals():
         "discount_percentage": deal.discount_percentage,
         "description": deal.description,
         "image_url": deal.image_url,
-        "canonical_path": deal.canonical_path,
+        "url": f"https://www.lidl.nl{deal.canonical_path}",  # Construct full URL
         "created_at": deal.created_at
     } for deal in deals])
+
 
 
 if __name__ == '__main__':
