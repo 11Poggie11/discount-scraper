@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swipe Deals</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        #app {
+            width: 300px;
+            height: 500px;
+            position: relative;
+        }
+        .card {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .card img {
+            max-width: 80%;
+            max-height: 60%;
+            border-radius: 10px;
+        }
+        .card h3 {
+            margin-top: 10px;
+        }
+        .card p {
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        const app = document.getElementById('app');
+        
+        let currentIndex = 0;
+        let deals = [];
+
+        // Fetch deals from the backend
+        async function fetchDeals() {
+            const response = await fetch('/api/deals');
+            deals = await response.json();
+            renderCard();
+        }
+
+        function renderCard() {
+            if (currentIndex >= deals.length) {
+                app.innerHTML = '<h2>No more deals!</h2>';
+                return;
+            }
+
+            const deal = deals[currentIndex];
+            
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            card.innerHTML = `
+                <img src="${deal.image}" alt="${deal.product_name}">
+                <h3>${deal.product_name}</h3>
+                <p>Price: €${deal.price} (was €${deal.old_price})</p>
+                <p>Discount: ${deal.discount_percentage}%</p>
+                <a href="${deal.link}" target="_blank">View Deal</a>
+            `;
+
+            app.innerHTML = '';
+            app.appendChild(card);
+
+            // Add swipe functionality
+            let startX;
+
+            card.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+            });
+
+            card.addEventListener('touchmove', (e) => {
+                const moveX = e.touches[0].clientX - startX;
+
+                card.style.transform = `translateX(${moveX}px)`;
+                card.style.opacity = `${1 - Math.abs(moveX) / window.innerWidth}`;
+            });
+
+            card.addEventListener('touchend', (e) => {
+                const moveX = e.changedTouches[0].clientX - startX;
+
+                if (moveX > 100) {
+                    // Swiped right
+                    currentIndex++;
+                    renderCard();
+                } else if (moveX < -100) {
+                    // Swiped left
+                    currentIndex++;
+                    renderCard();
+                } else {
+                    // Reset position
+                    card.style.transform = '';
+                    card.style.opacity = '';
+                }
+            });
+        }
+
+        fetchDeals();
+    </script>
+</body>
+</html>

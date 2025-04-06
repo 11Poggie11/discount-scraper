@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swipe Deals</title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #ff7eb3, #ff758c);
+            overflow: hidden;
+        }
+
+        #app {
+            width: 350px;
+            height: 600px;
+            position: relative;
+        }
+
+        h2 {
+            color: white;
+            text-align: center;
+        }
+
+        /* Card Styles */
+        .card {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .card img {
+            max-width: 80%;
+            max-height: 60%;
+            border-radius: 15px;
+        }
+
+        .card h3 {
+            margin-top: 10px;
+            font-size: 1.5em;
+        }
+
+        .card p {
+            margin-top: 5px;
+            font-size: 1em;
+        }
+
+        .card a {
+            color: #ff758c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        /* Buttons */
+        .swipe-buttons {
+            display: flex;
+            justify-content: space-evenly;
+            width: 100%;
+        }
+
+        .swipe-button {
+            background-color: #ff758c;
+            color: white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+
+        .swipe-button:hover {
+            background-color: #ff4f6d;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        const app = document.getElementById('app');
+        
+        let currentIndex = 0; // Tracks current deal
+        let deals = [];
+
+        // Fetch deals from the backend
+        async function fetchDeals() {
+            const response = await fetch('/api/deals');
+            deals = await response.json();
+            
+			// Render the first card
+			renderCard();
+		}
+
+		function renderCard() {
+			if (currentIndex >= deals.length) {
+				app.innerHTML = '<h2>No more deals!</h2>';
+				return; // Stop rendering if no more cards
+			}
+
+			const deal = deals[currentIndex];
+
+			const card = document.createElement('div');
+			card.className = 'card';
+			card.innerHTML = `
+				<img src="${deal.image}" alt="${deal.product_name}">
+				<h3>${deal.product_name}</h3>
+				<p>Price: €${deal.price} (was €${deal.old_price})</p>
+				<p>Discount Percentage : ${deal.discount_percentage}%</p>
+				<a href="${deal.link}" target="_blank">View Deal</a>
+			`;
+
+			app.innerHTML = '';
+			app.appendChild(card);
+
+			addSwipeFunctionality(card);
+		}
+
+		function addSwipeFunctionality(card) {
+			let startX;
+
+			// Touch Start Event
+			card.addEventListener('touchstart', (e) => {
+				startX = e.touches[0].clientX; // Record initial touch position
+			});
+
+			// Touch Move Event
+			card.addEventListener('touchmove', (e) => {
+				const moveX = e.touches[0].clientX - startX;
+
+				card.style.transform = `translateX(${moveX}px)`;
+				card.style.opacity = `${1 - Math.abs(moveX) / window.innerWidth}`;
+			});
+
+			// Touch End Event
+			card.addEventListener('touchend', (e) => {
+				const moveX = e.changedTouches[0].clientX - startX;
+
+				if (moveX > 100) { // Swipe Right
+					currentIndex++;
+					renderCard();
+				} else if (moveX < -100) { // Swipe Left
+					currentIndex++;
+					renderCard();
+				} else { // Reset Card Position
+					card.style.transform = '';
+					card.style.opacity = '';
+				}
+			});
+
+			// Mouse Events for Desktop Users
+			let isDragging = false;
+
+			card.addEventListener('mousedown', (e) => {
+				startX = e.clientX; // Record initial mouse position
+				isDragging = true; // Enable dragging state
+			});
+
+			document.addEventListener('mousemove', (e) => {
+				if (!isDragging) return;
+
+				const moveX = e.clientX - startX;
+
+				card.style.transform = `translateX(${moveX}px)`;
+				card.style.opacity = `${1 - Math.abs(moveX) / window.innerWidth}`;
+			});
+
+			document.addEventListener('mouseup', (e) => {
+				if (!isDragging) return;
+
+				isDragging = false; // Disable dragging state
+
+				const moveX = e.clientX - startX;
+
+				if (moveX > 100) { // Swipe Right
+					currentIndex++;
+					renderCard();
+				} else if (moveX < -100) { // Swipe Left
+					currentIndex++;
+					renderCard();
+				} else { // Reset Card Position
+					card.style.transform = '';
+					card.style.opacity = '';
+				}
+			});
+		}
+
+		fetchDeals(); // Start fetching deals on page load
+    </script>
+</body>
+</html>
