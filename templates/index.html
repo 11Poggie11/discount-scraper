@@ -41,6 +41,7 @@
 
             const card = document.createElement('div');
             card.className = 'card';
+            card.dataset.dealId = deal.id;
             card.innerHTML = `
                 <img src="${deal.image_url}" alt="${deal.product_name}">
                 <h3>${deal.product_name}</h3>
@@ -52,23 +53,18 @@
             app.innerHTML = '';
             app.appendChild(card);
 
-            console.log('Card rendered, adding swipe functionality');
             addSwipeFunctionality(card);
         }
 
         function addSwipeFunctionality(card) {
             let startX;
 
-            console.log('Swipe functionality added to card');
-
             card.addEventListener('touchstart', (e) => {
                 startX = e.touches[0].clientX;
-                console.log('Touchstart detected:', startX);
             });
 
             card.addEventListener('touchmove', (e) => {
                 const moveX = e.touches[0].clientX - startX;
-                console.log('Touchmove detected:', moveX);
 
                 card.style.transform = `translateX(${moveX}px)`;
                 card.style.opacity = `${1 - Math.abs(moveX) / window.innerWidth}`;
@@ -76,29 +72,36 @@
 
             card.addEventListener('touchend', (e) => {
                 const moveX = e.changedTouches[0].clientX - startX;
-                console.log('Touchend detected:', e.changedTouches[0].clientX);
-                console.log('MoveX:', moveX);
 
                 if (moveX > 50 || moveX < -50) { 
-                    console.log('Swipe detected, moving to next card');
+                    markDealAsViewed(card.dataset.dealId); // Mark as viewed
                     currentIndex++;
                     renderCard();
                 } else { 
-                    console.log('Swipe not detected, resetting styles');
                     card.style.transform = 'translateX(0)';
                     card.style.opacity = '1';
                 }
             });
-
-            // Temporary click listener for debugging
-            card.addEventListener('click', () => {
-                console.log('Card clicked!');
-            });
         }
 
-        // Check for touch event support
-        if (!('ontouchstart' in window)) {
-            console.warn('Touch events not supported on this device/browser');
+        // Function to mark a deal as viewed
+        async function markDealAsViewed(dealId) {
+            try {
+                const response = await fetch('/api/mark_viewed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deal_id: dealId }) // Send deal ID as JSON payload
+                });
+
+                const result = await response.json();
+                if (!response.ok) {
+                    console.error(result.error || 'Failed to mark deal as viewed');
+                } else {
+                    console.log(result.message); // Log success message
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
         }
 
         // Fetch and render deals on page load
