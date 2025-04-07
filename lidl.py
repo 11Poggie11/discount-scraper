@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import requests
 from bs4 import BeautifulSoup
@@ -26,8 +25,7 @@ class Deal(Base):
     description = Column(Text)
     image_url = Column(String(255))
     canonical_path = Column(String(255))
-    url = Column(String(255))  # New column for full URL
-    created_at = Column(DateTime, default=func.current_timestamp())
+    url = Column(String(255))  # Full URL for the deal
 
 # Ensure the table exists with updated schema
 Base.metadata.create_all(engine)
@@ -56,7 +54,7 @@ def fetch_html(url):
         print(f"Error fetching URL: {e}")
         return None
 
-def check_lidl_discounts(html_content, top_n=10):
+def parse_deals(html_content, top_n=10):
     """
     Parses the HTML content to find the top N product details on Lidl's website.
     """
@@ -127,7 +125,7 @@ if html_content:
     # Wipe database before processing new data
     wipe_database()
 
-    products = check_lidl_discounts(html_content)
+    products = parse_deals(html_content)
 
     if products:
         print(f"Found {len(products)} products")
