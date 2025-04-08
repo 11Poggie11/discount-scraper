@@ -6,12 +6,95 @@
     <title>Swipe Deals</title>
     <link rel="stylesheet" href="/static/style.css"> <!-- Link to external CSS -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet"> <!-- Google Fonts -->
+
+    <style>
+        .scrollable-list {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .deal-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .history-buttons {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+
+        .history-buttons button {
+            margin: 0 10px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background: #ff758c;
+            color: white;
+            cursor: pointer;
+        }
+
+        .filter-buttons {
+            margin-top: 10px;
+        }
+
+        .filter-buttons button {
+            margin-right: 10px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            border: none;
+            background-color: #ff758c;
+            color: white;
+        }
+
+        .close-button {
+            display: block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            background-color: #ff758c;
+            color: white;
+            text-align: center;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
     <h1>Swipe Deals</h1>
 
+    <!-- Buttons for Liked and Viewed Deals -->
+    <div class="history-buttons">
+        <button onclick="showLikedDeals()">❤️ Liked Deals</button>
+        <button onclick="showViewedDeals()">📜 All Viewed</button>
+    </div>
+
     <!-- App Container -->
     <div id="app"></div>
+
+    <!-- Scrollable Container for History View -->
+    <div id="history-view" class="scrollable-list">
+        <div class="close-button" onclick="closeHistoryView()">Close</div>
+        <div class="filter-buttons">
+            <button onclick="filterHistory('today')">Today</button>
+            <button onclick="filterHistory('week')">Past 7 Days</button>
+            <button onclick="filterHistory('month')">Past 30 Days</button>
+            <button onclick="filterHistory('forever')">Forever</button>
+        </div>
+        <!-- Deals will be dynamically inserted here -->
+    </div>
 
     <script>
         const app = document.getElementById('app');
@@ -42,10 +125,12 @@
             const card = document.createElement('div');
             card.className = 'card';
             card.dataset.dealId = deal.id;
+
+            // Ensure price is correctly displayed
             card.innerHTML = `
                 <img src="${deal.image_url}" alt="${deal.product_name}">
                 <h3>${deal.product_name}</h3>
-                <p>Price: €${deal.price} ${deal.old_price ? `(was €${deal.old_price})` : ''}</p>
+                <p>Price: €${deal.price !== undefined && deal.price !== null ? deal.price : 'N/A'} ${deal.old_price ? `(was €${deal.old_price})` : ''}</p>
                 <p>Discount Percentage : ${deal.discount_percentage}%</p>
                 <a href="${deal.url}" target="_blank">View Deal</a>
             `;
@@ -57,55 +142,76 @@
         }
 
         function addSwipeFunctionality(card) {
-            let startX;
+           let startX;
 
-            card.addEventListener('touchstart', (e) => {
-                startX = e.touches[0].clientX;
-            });
+           card.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
+           card.addEventListener('touchmove', (e) => { const moveX = e.touches[0].clientX - startX; card.style.transform = `translateX(${moveX}px)`; });
+           card.addEventListener('touchend', (e) => { const moveX = e.changedTouches[0].clientX - startX; if (moveX > 50) { markDealAsViewed(card.dataset.dealId, 'liked'); currentIndex++; renderCard(); } else if (moveX < -50) { markDealAsViewed(card.dataset.dealId, 'disliked'); currentIndex++; renderCard(); } else { card.style.transform = 'translateX(0)'; } });
+       }
 
-            card.addEventListener('touchmove', (e) => {
-                const moveX = e.touches[0].clientX - startX;
+       async function markDealAsViewed(dealId, direction) {
+           try {
+               const response = await fetch('/api/mark_viewed', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ deal_id: dealId, swipe_direction: direction })
+               });
 
-                card.style.transform = `translateX(${moveX}px)`;
-                card.style.opacity = `${1 - Math.abs(moveX) / window.innerWidth}`;
-            });
+               const result = await response.json();
+               if (!response.ok) {
+                   console.error(result.error || 'Failed to mark deal as viewed');
+               } else {
+                   console.log(result.message); // Log success message
+               }
+           } catch (error) {
+               console.error('Error:', error);
+           }
+       }
 
-            card.addEventListener('touchend', (e) => {
-                const moveX = e.changedTouches[0].clientX - startX;
+       async function showLikedDeals() {
+           const response = await fetch('/api/liked_deals');
+           const likedDeals = await response.json();
+           renderDealsList(likedDeals);
+       }
 
-                if (moveX > 50 || moveX < -50) { 
-                    markDealAsViewed(card.dataset.dealId); // Mark as viewed
-                    currentIndex++;
-                    renderCard();
-                } else { 
-                    card.style.transform = 'translateX(0)';
-                    card.style.opacity = '1';
-                }
-            });
-        }
+       async function showViewedDeals() {
+           const response = await fetch('/api/viewed_deals');
+           const viewedDeals = await response.json();
+           renderDealsList(viewedDeals);
+       }
 
-        // Function to mark a deal as viewed
-        async function markDealAsViewed(dealId) {
-            try {
-                const response = await fetch('/api/mark_viewed', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deal_id: dealId }) // Send deal ID as JSON payload
-                });
+       function renderDealsList(deals) {
+           const container = document.getElementById('history-view');
+           
+           container.innerHTML = '<div class="close-button" onclick="closeHistoryView()">Close</div>';
+           
+           deals.forEach(deal => {
+               const card = document.createElement('div');
+               card.className = 'deal-card';
+               
+               card.innerHTML = `
+                   <h3>${deal.product_name}</h3>
+                   <p>Price: €${deal.price !== undefined && deal.price !== null ? deal.price : 'N/A'}</p>
+                   ${deal.swipe_direction ? `<p>Status: ${deal.swipe_direction === 'liked' ? '❤️ Liked' : '👎 Disliked'}</p>` : ''}
+               `;
+               
+               container.appendChild(card);
+          });
 
-                const result = await response.json();
-                if (!response.ok) {
-                    console.error(result.error || 'Failed to mark deal as viewed');
-                } else {
-                    console.log(result.message); // Log success message
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
+          container.style.display = 'block';
+      }
 
-        // Fetch and render deals on page load
-        fetchDeals();
+      function closeHistoryView() {
+          document.getElementById('history-view').style.display = 'none';
+      }
+
+      async function filterHistory(timeRange) {
+          console.log(`Filtering history for range: ${timeRange}`);
+          // Add your backend logic here to filter based on time range
+      }
+
+      // Fetch and render deals on page load
+      fetchDeals();
     </script>
 </body>
 </html>

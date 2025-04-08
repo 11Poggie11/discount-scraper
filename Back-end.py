@@ -42,6 +42,7 @@ class ViewedDeal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     deal_id = db.Column(db.Integer, db.ForeignKey('deals.id'), nullable=False)
+    swipe_direction = db.Column(db.String(10), nullable=False)  # 'liked' or 'disliked'
     viewed_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 @login_manager.user_loader
@@ -98,22 +99,30 @@ def login_page():
 def mark_viewed():
     data = request.get_json()
     deal_id = data.get('deal_id')
-    
-    if not deal_id:
-        return jsonify({"error": "Missing deal_id"}), 400
-    
+    swipe_direction = data.get('swipe_direction')  # 'liked' or 'disliked'
+
+    if not deal_id or not swipe_direction:
+        return jsonify({"error": "Missing deal_id or swipe_direction"}), 400
+
     # Check for existing entry
     existing = ViewedDeal.query.filter_by(
         user_id=current_user.id,
         deal_id=deal_id
     ).first()
-    
-    if not existing:
-        new_view = ViewedDeal(user_id=current_user.id, deal_id=deal_id)
+
+    if existing:
+        # Update swipe direction if already viewed
+        existing.swipe_direction = swipe_direction
+        existing.viewed_at = db.func.current_timestamp()
+    else:
+        # Create a new entry
+        new_view = ViewedDeal(user_id=current_user.id, deal_id=deal_id, swipe_direction=swipe_direction)
         db.session.add(new_view)
-        db.session.commit()
+
+    db.session.commit()
     
-    return jsonify({"message": "Deal marked as viewed"}), 200
+    return jsonify({"message": f"Deal marked as {swipe_direction}"}), 200
+
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -127,6 +136,37 @@ def register():
         return jsonify({"message": "User registered successfully!"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+# Add these routes to your Back-end.py
+
+@app.route('/api/liked_deals')
+@login_required
+def get_liked_deals():
+    liked_deals = ViewedDeal.query.filter_by(
+        user_id=current_user.id,
+        swipe_direction='liked'
+    ).join(Deal).add_entity(Deal).all()
+    
+    return jsonify([{
+        "id": deal.id,
+        "product_name": deal.product_name,
+        # Include all other deal fields
+    } for view, deal in liked_deals])
+
+@app.route('/api/viewed_deals')
+@login_required
+def get_viewed_deals():
+    viewed_deals = ViewedDeal.query.filter_by(
+        user_id=current_user.id
+    ).join(Deal).add_entity(Deal).all()
+    
+    return jsonify([{
+        "id": deal.id,
+        "product_name": deal.product_name,
+        "swipe_direction": view.swipe_direction,
+        # Include all other deal fields
+    } for view, deal in viewed_deals])
+
 
 if __name__ == '__main__':
     app.run(debug=True)
